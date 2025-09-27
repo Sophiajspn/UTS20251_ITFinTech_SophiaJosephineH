@@ -19,6 +19,42 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState("All");
 
+  // --- helpers cart ---
+  const saveCart = (next) => {
+    setCart(next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("cart", JSON.stringify(next));
+    }
+  };
+  const getQty = (id) => cart.find((i) => i._id === id)?.qty || 0;
+
+  const addToCart = (p) => {
+    const found = cart.find((i) => i._id === p._id);
+    const next = found
+      ? cart.map((i) => (i._id === p._id ? { ...i, qty: i.qty + 1 } : i))
+      : [...cart, { _id: p._id, name: p.name, price: Number(p.price) || 0, qty: 1 }];
+    saveCart(next);
+  };
+
+  const inc = (p) => {
+    const next = cart.map((i) =>
+      i._id === p._id ? { ...i, qty: i.qty + 1 } : i
+    );
+    saveCart(next);
+  };
+
+  const dec = (p) => {
+    const found = cart.find((i) => i._id === p._id);
+    if (!found) return;
+    const newQty = found.qty - 1;
+    const next =
+      newQty > 0
+        ? cart.map((i) => (i._id === p._id ? { ...i, qty: newQty } : i))
+        : cart.filter((i) => i._id !== p._id);
+    saveCart(next);
+  };
+
+  // --- effects ---
   useEffect(() => {
     fetch("/api/products")
       .then((r) => r.json())
@@ -29,17 +65,9 @@ export default function Home() {
     setCart(saved);
   }, []);
 
-  function addToCart(p) {
-    const found = cart.find((i) => i._id === p._id);
-    const next = found
-      ? cart.map((i) => (i._id === p._id ? { ...i, qty: i.qty + 1 } : i))
-      : [...cart, { _id: p._id, name: p.name, price: p.price, qty: 1 }];
-    setCart(next);
-    localStorage.setItem("cart", JSON.stringify(next));
-  }
-
+  // --- derived ---
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
-  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const cartTotal = cart.reduce((s, i) => s + Number(i.price || 0) * i.qty, 0);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -58,7 +86,7 @@ export default function Home() {
       {/* Background */}
       <div className="fixed inset-0 -z-10 bg-gradient-to-br from-pink-100 via-pink-50 to-pink-200" />
 
-      {/* HEADER kecil */}
+      {/* HEADER */}
       <header className="border-b bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -114,43 +142,70 @@ export default function Home() {
           <div className="py-16 text-center text-neutral-500">Menu tidak ditemukan</div>
         ) : (
           <div className="grid gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-            {filtered.map((p) => (
-              <article
-                key={p._id}
-                className="flex flex-col overflow-hidden rounded-2xl bg-white shadow hover:shadow-lg transition"
-              >
-                <div className="aspect-square w-full overflow-hidden">
-                  {p.image ? (
-                    <img
-                      src={p.image}
-                      alt={p.name}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="h-full w-full bg-gradient-to-br from-white to-rose-50" />
-                  )}
-                </div>
-                <div className="flex flex-1 flex-col p-4">
-                  <h3 className="text-sm font-semibold">{p.name}</h3>
-                  <p className="text-xs text-neutral-500">{p.category}</p>
-                  <div className="mt-2 font-semibold text-rose-600">
-                    Rp {Number(p.price).toLocaleString()}
+            {filtered.map((p) => {
+              const qty = getQty(p._id);
+              return (
+                <article
+                  key={p._id}
+                  className="flex flex-col overflow-hidden rounded-2xl bg-white shadow hover:shadow-lg transition"
+                >
+                  <div className="aspect-square w-full overflow-hidden">
+                    {p.image ? (
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-br from-white to-rose-50" />
+                    )}
                   </div>
-                  <button
-                    onClick={() => addToCart(p)}
-                    className="mt-auto w-full rounded-lg bg-rose-500 px-3 py-2 text-sm font-medium text-white hover:bg-rose-600"
-                  >
-                    Add +
-                  </button>
-                </div>
-              </article>
-            ))}
+                  <div className="flex flex-1 flex-col p-4">
+                    <h3 className="text-sm font-semibold">{p.name}</h3>
+                    <p className="text-xs text-neutral-500">{p.category}</p>
+                    <div className="mt-2 font-semibold text-rose-600">
+                      Rp {Number(p.price).toLocaleString()}
+                    </div>
+
+                    {/* Add / Stepper */}
+                    {qty === 0 ? (
+                      <button
+                        onClick={() => addToCart(p)}
+                        className="mt-auto w-full rounded-lg bg-rose-500 px-3 py-2 text-sm font-medium text-white hover:bg-rose-600"
+                      >
+                        Add +
+                      </button>
+                    ) : (
+                      <div className="mt-auto grid grid-cols-3 items-center gap-2">
+                        <button
+                          onClick={() => dec(p)}
+                          className="rounded-lg border px-3 py-2 text-sm font-semibold hover:bg-neutral-50"
+                          aria-label={`Kurangi ${p.name}`}
+                        >
+                          −
+                        </button>
+                        <div className="text-center text-sm font-semibold">
+                          {qty}
+                        </div>
+                        <button
+                          onClick={() => inc(p)}
+                          className="rounded-lg bg-rose-500 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-600"
+                          aria-label={`Tambah ${p.name}`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </main>
 
-      {/* FOOTER (non-sticky, di bawah terus) */}
+      {/* FOOTER */}
       <footer className="border-t bg-white/90 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <div>
