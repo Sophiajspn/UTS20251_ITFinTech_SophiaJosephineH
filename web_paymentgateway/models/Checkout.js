@@ -1,21 +1,21 @@
-import mongoose, { Schema, models, model } from "mongoose";
+import { Schema, models, model } from "mongoose";
 
 const ItemSchema = new Schema({
-  productId: String,
-  name: String,
-  price: Number,
+  productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+  name: String,     
+  price: Number,    
   qty: Number,
 });
 
 const CheckoutSchema = new Schema(
   {
-    items: [ItemSchema],
+    items: { type: [ItemSchema], default: [] },
     total: { type: Number, required: true },
 
-    payerEmail: String,
+    payerEmail: { type: String, required: true },
 
-    externalId: { type: String, index: true },
-    invoiceId:  { type: String, index: true }, 
+    externalId: { type: String, index: true, sparse: true, unique: false },
+    invoiceId:  { type: String, index: true, sparse: true, unique: false },
 
     status: {
       type: String,
@@ -26,5 +26,7 @@ const CheckoutSchema = new Schema(
   },
   { timestamps: true }
 );
+
+CheckoutSchema.index({ createdAt: 1 });
 
 export default models.Checkout || model("Checkout", CheckoutSchema);

@@ -1,52 +1,84 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 export default function Checkout() {
   const [cart, setCart] = useState([]);
+  const [email, setEmail] = useState("");
   const [checkoutId, setCheckoutId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     const saved = JSON.parse(localStorage.getItem("cart") || "[]");
     setCart(saved);
   }, []);
 
-  const subtotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
+  const subtotal = useMemo(
+    () => cart.reduce((s, i) => s + Number(i.price) * Number(i.qty), 0),
+    [cart]
+  );
   const shipping = 0; // cafe pickup / flat Rp0
   const total = subtotal + shipping;
 
+  function isEmailValid(v) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  }
+
   async function createCheckout() {
-    const r = await fetch("/api/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: cart }),
-    });
-    const data = await r.json();
-    setCheckoutId(data.checkoutId);
+    if (!email) return alert("Masukkan email dulu ya!");
+    if (!isEmailValid(email)) return alert("Format email tidak valid.");
+    if (cart.length === 0) return alert("Keranjang masih kosong.");
+
+    setSaving(true);
+    try {
+      const r = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: cart, payerEmail: email }),
+      });
+      const data = await r.json();
+
+      if (!r.ok) {
+        return alert(data?.message || "Gagal menyimpan checkout");
+      }
+
+      setCheckoutId(data.checkoutId || null);
+      alert("Checkout tersimpan ✅");
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat menyimpan checkout");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function payNow() {
-    if (!checkoutId) await createCheckout();
-    const id =
-      checkoutId ||
-      (await (
-        await fetch("/api/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: cart }),
-        })
-      ).json()).checkoutId;
+    if (!email) return alert("Masukkan email dulu ya!");
+    if (!isEmailValid(email)) return alert("Format email tidak valid.");
+    if (cart.length === 0) return alert("Keranjang masih kosong.");
 
-    const r = await fetch("/api/payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checkoutId: id }),
-    });
-    const data = await r.json();
-    if (data.invoice_url) {
+    setPaying(true);
+    try {
+      // panggil endpoint yang sama: simpan checkout + buat invoice Xendit
+      const r = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: cart, payerEmail: email }),
+      });
+      const data = await r.json();
+
+      if (!r.ok || !data.invoiceUrl) {
+        return alert(data?.message || "Gagal membuat invoice");
+      }
+
+      // bersihkan keranjang & redirect ke halaman pembayaran Xendit
       localStorage.removeItem("cart");
-      window.location.href = data.invoice_url;
-    } else {
-      alert("Gagal membuat invoice");
+      window.location.href = data.invoiceUrl;
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat membuat invoice");
+    } finally {
+      setPaying(false);
     }
   }
 
@@ -79,11 +111,16 @@ export default function Checkout() {
             {/* Left: Items */}
             <section className="md:col-span-2">
               <div className="rounded-2xl border bg-white p-4 shadow-sm">
-                <h2 className="mb-3 border-b pb-3 text-lg font-semibold">Item di Keranjang</h2>
+                <h2 className="mb-3 border-b pb-3 text-lg font-semibold">
+                  Item di Keranjang
+                </h2>
 
                 <ul className="divide-y">
                   {cart.map((i) => (
-                    <li key={i._id} className="flex items-center justify-between gap-3 py-3">
+                    <li
+                      key={i._id}
+                      className="flex items-center justify-between gap-3 py-3"
+                    >
                       <div className="flex items-center gap-3">
                         {/* avatar huruf (kalau ga ada gambar) */}
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-700 font-semibold">
@@ -91,10 +128,14 @@ export default function Checkout() {
                         </div>
                         <div>
                           <div className="text-sm font-medium">{i.name}</div>
-                          <div className="text-xs text-neutral-500">Qty: {i.qty}</div>
+                          <div className="text-xs text-neutral-500">
+                            Qty: {i.qty}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-sm font-semibold">Rp {(i.price * i.qty).toLocaleString()}</div>
+                      <div className="text-sm font-semibold">
+                        Rp {(Number(i.price) * Number(i.qty)).toLocaleString()}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -104,7 +145,9 @@ export default function Checkout() {
             {/* Right: Summary */}
             <aside className="md:col-span-1">
               <div className="sticky top-20 rounded-2xl border bg-white p-4 shadow-sm">
-                <h2 className="mb-3 border-b pb-3 text-lg font-semibold">Ringkasan</h2>
+                <h2 className="mb-3 border-b pb-3 text-lg font-semibold">
+                  Ringkasan
+                </h2>
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
@@ -113,26 +156,46 @@ export default function Checkout() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-600">Pengiriman</span>
-                    <span>{shipping === 0 ? "Gratis" : `Rp ${shipping.toLocaleString()}`}</span>
+                    <span>
+                      {shipping === 0
+                        ? "Gratis"
+                        : `Rp ${shipping.toLocaleString()}`}
+                    </span>
                   </div>
                   <div className="mt-2 flex items-center justify-between border-t pt-3 font-semibold">
                     <span>Total</span>
                     <span>Rp {total.toLocaleString()}</span>
+                  </div>
+
+                  {/* Email input */}
+                  <div className="pt-3">
+                    <label className="text-xs text-neutral-600">
+                      Email Pembeli
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="contoh: kamu@gmail.com"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    />
                   </div>
                 </div>
 
                 <div className="mt-4 space-y-2">
                   <button
                     onClick={createCheckout}
-                    className="w-full rounded-full border px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+                    disabled={saving || paying}
+                    className={`w-full rounded-full border px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60`}
                   >
-                    Save Checkout
+                    {saving ? "Menyimpan..." : "Save Checkout"}
                   </button>
                   <button
                     onClick={payNow}
-                    className="w-full rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600"
+                    disabled={paying || saving}
+                    className={`w-full rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60`}
                   >
-                    Bayar Sekarang
+                    {paying ? "Membuat Invoice..." : "Bayar Sekarang"}
                   </button>
                 </div>
 

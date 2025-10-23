@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Link from "next/link";
 
 const UI_CATEGORIES = ["All", "Dessert", "Beverage", "Main Course", "Appetizer"];
@@ -18,6 +19,19 @@ export default function Home() {
   const [cart, setCart] = useState([]);
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState("All");
+  const [userName, setUserName] = useState(""); // State untuk menyimpan nama pengguna
+  const router = useRouter(); // Gunakan router untuk redirect
+
+  // --- Check if user is logged in ---
+  useEffect(() => {
+    const token = localStorage.getItem("authToken"); // Memeriksa token
+    if (!token) {
+      router.push("/login"); // Jika tidak ada token, redirect ke halaman login
+    }
+
+    const name = localStorage.getItem("userName"); // Ambil nama pengguna dari localStorage
+    setUserName(name); // Set nama pengguna untuk ditampilkan
+  }, [router]);
 
   // --- helpers cart ---
   const saveCart = (next) => {
@@ -69,17 +83,21 @@ export default function Home() {
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
   const cartTotal = cart.reduce((s, i) => s + Number(i.price || 0) * i.qty, 0);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter((p) => {
-      const catOk = activeCat === "All" || p.uiCat === activeCat;
-      const qOk =
-        !q ||
-        p.name?.toLowerCase().includes(q) ||
-        p.category?.toLowerCase().includes(q);
-      return catOk && qOk;
-    });
-  }, [products, query, activeCat]);
+  const filtered = products.filter((p) => {
+    const catOk = activeCat === "All" || p.uiCat === activeCat;
+    const qOk =
+      !query ||
+      p.name?.toLowerCase().includes(query.toLowerCase()) ||
+      p.category?.toLowerCase().includes(query.toLowerCase());
+    return catOk && qOk;
+  });
+
+  const handleLogout = () => {
+    // Hapus token dan nama pengguna dari localStorage
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userName");
+    router.push("/login"); // Redirect ke halaman login
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -93,16 +111,17 @@ export default function Home() {
             <span className="text-xl">🍩</span>
             <h1 className="text-lg font-bold">BONOYA CAFE</h1>
           </div>
-          <Link href="/checkout" className="relative inline-flex">
-            <span className="rounded-full bg-black text-white px-4 py-1.5 text-sm font-medium">
-              Cart
-            </span>
-            {cartCount > 0 && (
-              <span className="absolute -top-2 -right-2 rounded-full bg-rose-500 text-white text-xs px-1.5">
-                {cartCount}
-              </span>
-            )}
-          </Link>
+          {/* Menampilkan Nama Pengguna */}
+          {userName && (
+            <span className="text-sm font-semibold">Welcome, {userName}!</span>
+          )}
+          {/* Tombol Logout */}
+          <button
+            onClick={handleLogout}
+            className="ml-4 px-4 py-1.5 text-sm font-medium text-white bg-red-500 rounded-full hover:bg-red-600"
+          >
+            Logout
+          </button>
         </div>
 
         {/* Search */}
