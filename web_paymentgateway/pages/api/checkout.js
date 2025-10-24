@@ -1,19 +1,23 @@
 import { connectDB } from "@/lib/db";
 import Checkout from "@/models/Checkout";
 
+// WA helper (samakan dengan file yang sudah kamu buat di /lib/wa_twilio.js)
+import { sendWaText, toWhatsAppE164 } from "@/lib/wa_twilio";
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
   try {
     await connectDB();
 
-    const { items, payerEmail: rawEmail } = req.body;
+    const { items, payerEmail: rawEmail, payerPhone: rawPhone, payerName } = req.body;
+
     const payerEmail =
       typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
-
     if (!payerEmail) {
       return res.status(400).json({ message: "payerEmail is required" });
     }
+
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "items is required" });
     }
@@ -25,6 +29,7 @@ export default async function handler(req, res) {
       price: Number(i.price),
       qty: Number(i.qty),
     }));
+
     if (
       cleanItems.some(
         (i) =>
@@ -45,19 +50,22 @@ export default async function handler(req, res) {
     // 1) simpan ke Mongo
     const doc = await Checkout.create({
       payerEmail,
+      payerPhone: rawPhone || null,
+      payerName: payerName || null,
       items: cleanItems,
       total,
+      status: "PENDING",
+      notified: { checkout: false, paid: false }, // flag idempotency sederhana
+      createdAt: new Date(),
     });
 
     // 2) panggil Xendit buat invoice
     const externalId = `checkout-${doc._id}`; // dijamin unik
     const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+      process.env.EXT_PUBLIC_BASE_URL || "http://localhost:3000"; // disamakan dg .env kamu
 
     // NOTE: pastikan XENDIT_API_KEY ada di .env.local
-    const auth = Buffer.from(`${process.env.XENDIT_API_KEY}:`).toString(
-      "base64"
-    );
+    const auth = Buffer.from(`${process.env.XENDIT_API_KEY}:`).toString("base64");
 
     const xenditResp = await fetch("https://api.xendit.co/v2/invoices", {
       method: "POST",
@@ -78,25 +86,42 @@ export default async function handler(req, res) {
     const invoice = await xenditResp.json();
 
     if (!xenditResp.ok) {
-      // log detail error biar gampang debug
       console.error("Xendit error:", xenditResp.status, invoice);
-      // rollback status optional: bisa tandai FAILED
       await Checkout.findByIdAndUpdate(doc._id, { status: "FAILED" });
       return res
         .status(502)
-        .json({
-          message: "Gagal membuat invoice",
-          xendit: invoice, // kirim balik detail agar keliatan di FE
-        });
+        .json({ message: "Gagal membuat invoice", xendit: invoice });
     }
 
     // 3) simpan id invoice dari Xendit
     await Checkout.findByIdAndUpdate(doc._id, {
       invoiceId: invoice.id,
       externalId: invoice.external_id,
+      invoiceUrl: invoice.invoice_url,
+      status: "PENDING",
     });
 
-    // 4) kirim ke FE
+    // 4) Kirim WA (non-blocking, jangan gagalkan checkout kalau gagal)
+    if (rawPhone) {
+      try {
+        const to = toWhatsAppE164(rawPhone);
+        const body =
+`Halo ${payerName || "Customer"} 👋
+Pesanan kamu #${doc._id} sudah kami terima ✅
+Total: Rp ${Number(total).toLocaleString("id-ID")}
+Invoice: ${invoice.invoice_url}
+
+Silakan selesaikan pembayaran. Terima kasih!`;
+        await sendWaText({ to, body });
+        // update flag notified
+        await Checkout.findByIdAndUpdate(doc._id, { "notified.checkout": true });
+      } catch (e) {
+        console.error("WA checkout fail:", e.message);
+        // sengaja tidak throw
+      }
+    }
+
+    // 5) response ke FE
     return res.status(201).json({
       checkoutId: String(doc._id),
       total,

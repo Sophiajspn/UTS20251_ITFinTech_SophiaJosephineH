@@ -4,6 +4,8 @@ import Link from "next/link";
 export default function Checkout() {
   const [cart, setCart] = useState([]);
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
   const [checkoutId, setCheckoutId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -24,9 +26,25 @@ export default function Checkout() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
   }
 
+  function isPhoneValid(v) {
+    // terima 08xxxx atau +62xxxx, panjang 10–15 digit setelah normalisasi
+    const digits = String(v || "").replace(/\D/g, "");
+    if (!digits) return false;
+    const normalized = digits.startsWith("62")
+      ? digits
+      : digits.startsWith("0")
+      ? `62${digits.slice(1)}`
+      : digits.startsWith("8")
+      ? `62${digits}`
+      : digits;
+    return normalized.length >= 10 && normalized.length <= 15;
+  }
+
   async function createCheckout() {
     if (!email) return alert("Masukkan email dulu ya!");
     if (!isEmailValid(email)) return alert("Format email tidak valid.");
+    if (!phone) return alert("Masukkan nomor WhatsApp kamu.");
+    if (!isPhoneValid(phone)) return alert("Nomor WhatsApp tidak valid.");
     if (cart.length === 0) return alert("Keranjang masih kosong.");
 
     setSaving(true);
@@ -34,7 +52,12 @@ export default function Checkout() {
       const r = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: cart, payerEmail: email }),
+        body: JSON.stringify({
+          items: cart,
+          payerEmail: email,
+          payerPhone: phone,
+          payerName: name || undefined,
+        }),
       });
       const data = await r.json();
 
@@ -43,7 +66,7 @@ export default function Checkout() {
       }
 
       setCheckoutId(data.checkoutId || null);
-      alert("Checkout tersimpan ✅");
+      alert("Checkout tersimpan ✅ (Notifikasi WA dikirim)");
     } catch (err) {
       console.error(err);
       alert("Terjadi kesalahan saat menyimpan checkout");
@@ -55,6 +78,8 @@ export default function Checkout() {
   async function payNow() {
     if (!email) return alert("Masukkan email dulu ya!");
     if (!isEmailValid(email)) return alert("Format email tidak valid.");
+    if (!phone) return alert("Masukkan nomor WhatsApp kamu.");
+    if (!isPhoneValid(phone)) return alert("Nomor WhatsApp tidak valid.");
     if (cart.length === 0) return alert("Keranjang masih kosong.");
 
     setPaying(true);
@@ -63,7 +88,12 @@ export default function Checkout() {
       const r = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: cart, payerEmail: email }),
+        body: JSON.stringify({
+          items: cart,
+          payerEmail: email,
+          payerPhone: phone,
+          payerName: name || undefined,
+        }),
       });
       const data = await r.json();
 
@@ -179,6 +209,38 @@ export default function Checkout() {
                       placeholder="contoh: kamu@gmail.com"
                       className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
                     />
+                  </div>
+
+                  {/* Nama (opsional) */}
+                  <div className="pt-3">
+                    <label className="text-xs text-neutral-600">
+                      Nama (opsional)
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="contoh: Sophia"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  {/* Nomor WhatsApp */}
+                  <div className="pt-3">
+                    <label className="text-xs text-neutral-600">
+                      Nomor WhatsApp
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="contoh: 0812xxxxxxxx atau +62812xxxxxxxx"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    />
+                    <p className="mt-1 text-[11px] text-neutral-500">
+                      Kami akan kirim notifikasi ke WhatsApp ini saat checkout &
+                      pembayaran sukses.
+                    </p>
                   </div>
                 </div>
 
