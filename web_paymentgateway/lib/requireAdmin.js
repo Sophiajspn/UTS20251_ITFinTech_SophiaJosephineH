@@ -1,19 +1,20 @@
-import { connectDB } from "./db";
-import User from "../models/User";
+import jwt from "jsonwebtoken";
 
-export async function requireAdmin(req, res) {
-  await connectDB();
+export async function requireAdmin(req) {
+  const bearer = req.headers.authorization || "";
+  const headerToken = bearer.startsWith("Bearer ") ? bearer.slice(7) : null;
+  const cookieToken = req.cookies?.token;
+  const token = cookieToken || headerToken;
 
-  const email = req.headers["x-user-email"]; 
+  if (!token) return { ok: false, status: 401, msg: "Unauthenticated" };
 
-  if (!email) return { ok: false, status: 401, msg: "Unauthenticated" };
-
-  const user = await User.findOne({ email });
-  if (!user) return { ok: false, status: 404, msg: "User not found" };
-
-  if (user.role !== "admin") {
-    return { ok: false, status: 403, msg: "Forbidden — admin only" };
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.role !== "admin") {
+      return { ok: false, status: 403, msg: "Forbidden — admin only" };
+    }
+    return { ok: true, user: payload };
+  } catch (e) {
+    return { ok: false, status: 401, msg: "Unauthenticated" };
   }
-
-  return { ok: true, user };
 }

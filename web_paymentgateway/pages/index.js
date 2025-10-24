@@ -14,24 +14,15 @@ function normalizeCategory(raw = "") {
   return "Main Course";
 }
 
-export default function Home() {
+export default function Home({ userFromSSR }) {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState("All");
-  const [userName, setUserName] = useState(""); // State untuk menyimpan nama pengguna
-  const router = useRouter(); // Gunakan router untuk redirect
 
-  // --- Check if user is logged in ---
-  useEffect(() => {
-    const token = localStorage.getItem("authToken"); // Memeriksa token
-    if (!token) {
-      router.push("/login"); // Jika tidak ada token, redirect ke halaman login
-    }
-
-    const name = localStorage.getItem("userName"); // Ambil nama pengguna dari localStorage
-    setUserName(name); // Set nama pengguna untuk ditampilkan
-  }, [router]);
+  // tampilkan nama user (pakai email sebagai placeholder); bisa diganti kalau kamu simpan display name di DB
+  const [userName, setUserName] = useState(userFromSSR?.email || "");
+  const router = useRouter();
 
   // --- helpers cart ---
   const saveCart = (next) => {
@@ -77,7 +68,11 @@ export default function Home() {
       );
     const saved = JSON.parse(localStorage.getItem("cart") || "[]");
     setCart(saved);
-  }, []);
+
+    // (opsional) kalau kamu masih simpan display name di localStorage
+    const nameLS = localStorage.getItem("userName");
+    if (nameLS && !userFromSSR?.email) setUserName(nameLS);
+  }, [userFromSSR?.email]);
 
   // --- derived ---
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
@@ -92,11 +87,13 @@ export default function Home() {
     return catOk && qOk;
   });
 
-  const handleLogout = () => {
-    // Hapus token dan nama pengguna dari localStorage
-    localStorage.removeItem("authToken");
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } catch (_) {}
+    // bersihkan data UI lokal jika ada
     localStorage.removeItem("userName");
-    router.push("/login"); // Redirect ke halaman login
+    router.push("/login");
   };
 
   return (
@@ -241,4 +238,38 @@ export default function Home() {
       </footer>
     </div>
   );
+}
+
+// ⬇️ Proteksi di SERVER: baca cookie httpOnly, redirect admin → /admin, biarkan customer/guest ke /
+export async function getServerSideProps({ req }) {
+  const token = req.cookies?.token || null;
+
+  if (!token) {
+    // Guest: biarkan tetap di / (atau redirect ke /login kalau kamu mau full-protected)
+    return { props: { userFromSSR: null } };
+  }
+
+  try {
+    const jwt = require("jsonwebtoken"); // require di server-side
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Admin jangan di /, arahkan ke dashboard admin
+    if (decoded.role === "admin") {
+      return { redirect: { destination: "/admin", permanent: false } };
+    }
+
+    // Customer boleh di /
+    return {
+      props: {
+        userFromSSR: {
+          email: decoded.email,
+          role: decoded.role,
+          userId: decoded.userId,
+        },
+      },
+    };
+  } catch {
+    // token invalid/expired → treat as guest
+    return { props: { userFromSSR: null } };
+  }
 }

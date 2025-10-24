@@ -1,5 +1,5 @@
 import { connectDB } from "../../../../lib/db";
-import Order from "../../../../models/Order";
+import Order from "../../../../models/Checkout";
 import { requireAdmin } from "../../../../lib/requireAdmin";
 
 export default async function handler(req, res) {
