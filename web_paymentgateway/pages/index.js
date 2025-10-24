@@ -59,7 +59,6 @@ export default function Home({ userFromSSR }) {
     saveCart(next);
   };
 
-  // --- effects ---
   useEffect(() => {
     fetch("/api/products")
       .then((r) => r.json())
@@ -69,12 +68,10 @@ export default function Home({ userFromSSR }) {
     const saved = JSON.parse(localStorage.getItem("cart") || "[]");
     setCart(saved);
 
-    // (opsional) kalau kamu masih simpan display name di localStorage
     const nameLS = localStorage.getItem("userName");
     if (nameLS && !userFromSSR?.email) setUserName(nameLS);
   }, [userFromSSR?.email]);
 
-  // --- derived ---
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
   const cartTotal = cart.reduce((s, i) => s + Number(i.price || 0) * i.qty, 0);
 
@@ -221,7 +218,6 @@ export default function Home({ userFromSSR }) {
         )}
       </main>
 
-      {/* FOOTER */}
       <footer className="border-t bg-white/90 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <div>
@@ -240,25 +236,21 @@ export default function Home({ userFromSSR }) {
   );
 }
 
-// ⬇️ Proteksi di SERVER: baca cookie httpOnly, redirect admin → /admin, biarkan customer/guest ke /
 export async function getServerSideProps({ req }) {
   const token = req.cookies?.token || null;
 
   if (!token) {
-    // Guest: biarkan tetap di / (atau redirect ke /login kalau kamu mau full-protected)
     return { props: { userFromSSR: null } };
   }
 
   try {
-    const jwt = require("jsonwebtoken"); // require di server-side
+    const jwt = require("jsonwebtoken"); 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Admin jangan di /, arahkan ke dashboard admin
     if (decoded.role === "admin") {
       return { redirect: { destination: "/admin", permanent: false } };
     }
 
-    // Customer boleh di /
     return {
       props: {
         userFromSSR: {
@@ -269,7 +261,6 @@ export async function getServerSideProps({ req }) {
       },
     };
   } catch {
-    // token invalid/expired → treat as guest
     return { props: { userFromSSR: null } };
   }
 }

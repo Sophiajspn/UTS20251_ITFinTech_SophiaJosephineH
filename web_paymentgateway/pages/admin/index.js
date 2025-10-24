@@ -13,6 +13,21 @@ import {
 } from "chart.js";
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
+// ---------- Small UI helpers ----------
+function Badge({ tone = "gray", children }) {
+  const map = {
+    gray: "bg-gray-100 text-gray-700 ring-gray-200",
+    green: "bg-emerald-100 text-emerald-700 ring-emerald-200",
+    yellow: "bg-amber-100 text-amber-700 ring-amber-200",
+    pink: "bg-pink-100 text-pink-700 ring-pink-200",
+  };
+  return (
+    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ring-1 ${map[tone] || map.gray}`}>
+      {children}
+    </span>
+  );
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
 
@@ -20,9 +35,16 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState("");
   const [range, setRange] = useState("day");
   const [sales, setSales] = useState({ labels: [], amounts: [], counts: [] });
+
   const [products, setProducts] = useState([]);
-  const [form, setForm] = useState({ name: "", sku: "", price: "", stock: "", imageUrl: "" });
-  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({
+    name: "",
+    sku: "",
+    price: "",
+    stock: "",
+    image: "", // <- pakai image, bukan imageUrl
+  });
+
   const [err, setErr] = useState("");
 
   // ================== LOGOUT ==================
@@ -48,22 +70,6 @@ export default function AdminDashboard() {
     }
   }
 
-  async function updateOrderStatus(id, status) {
-    try {
-      const res = await fetch(`/api/admin/orders/${id}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.message || "Gagal update status");
-      loadOrders();
-    } catch (e) {
-      setErr(String(e.message));
-    }
-  }
-
   // ================== SALES ==================
   async function loadSales() {
     try {
@@ -81,7 +87,14 @@ export default function AdminDashboard() {
   const chartData = useMemo(
     () => ({
       labels: sales.labels,
-      datasets: [{ label: "Omset (Rp)", data: sales.amounts }],
+      datasets: [
+        {
+          label: "Omset (Rp)",
+          data: sales.amounts,
+          borderWidth: 3,
+          tension: 0.35,
+        },
+      ],
     }),
     [sales]
   );
@@ -106,43 +119,15 @@ export default function AdminDashboard() {
         price: Number(form.price),
         stock: Number(form.stock),
       };
-      const url = editingId ? `/api/admin/products/${editingId}` : `/api/admin/products`;
-      const method = editingId ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
+      const res = await fetch(`/api/admin/products`, {
+        method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload), // image ikut terkirim
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Gagal simpan produk");
-      setEditingId(null);
-      setForm({ name: "", sku: "", price: "", stock: "", imageUrl: "" });
-      loadProducts();
-    } catch (e) {
-      setErr(String(e.message));
-    }
-  }
-
-  function editProduct(p) {
-    setEditingId(p._id);
-    setForm({
-      name: p.name,
-      sku: p.sku,
-      price: p.price,
-      stock: p.stock,
-      imageUrl: p.imageUrl || "",
-    });
-  }
-
-  async function deleteProduct(id) {
-    try {
-      const res = await fetch(`/api/admin/products/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.message || "Gagal hapus produk");
+      setForm({ name: "", sku: "", price: "", stock: "", image: "" });
       loadProducts();
     } catch (e) {
       setErr(String(e.message));
@@ -164,29 +149,53 @@ export default function AdminDashboard() {
 
   // ================== UI ==================
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
-
-        {/* Header + Logout */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-pink-100">
+      {/* Topbar */}
+      <header className="sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-white/50 bg-white/70 border-b border-pink-100">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-pink-500/90 grid place-items-center text-white font-bold">A</div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Admin Dashboard</h1>
+          </div>
           <button
             onClick={handleLogout}
-            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            className="px-4 py-2 bg-rose-500 text-white rounded-xl hover:bg-rose-600 transition-colors"
           >
             Logout
           </button>
         </div>
+      </header>
 
-        {err && <div className="p-3 rounded bg-red-50 text-red-700 text-sm">{err}</div>}
+      <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        {err && (
+          <div className="p-3 rounded-xl bg-rose-50 text-rose-700 text-sm ring-1 ring-rose-100">
+            {err}
+          </div>
+        )}
+
+        {/* Quick stats */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl bg-white/70 backdrop-blur p-5 ring-1 ring-pink-100 shadow-sm">
+            <p className="text-sm text-gray-500">Total Orders</p>
+            <p className="text-2xl font-semibold mt-1">{orders.length}</p>
+          </div>
+          <div className="rounded-2xl bg-white/70 backdrop-blur p-5 ring-1 ring-pink-100 shadow-sm">
+            <p className="text-sm text-gray-500">Range</p>
+            <p className="text-2xl font-semibold mt-1">{range === "day" ? "Per Hari" : "Per Bulan"}</p>
+          </div>
+          <div className="rounded-2xl bg-white/70 backdrop-blur p-5 ring-1 ring-pink-100 shadow-sm">
+            <p className="text-sm text-gray-500">Total Produk</p>
+            <p className="text-2xl font-semibold mt-1">{products.length}</p>
+          </div>
+        </section>
 
         {/* A. ORDERS */}
-        <section className="bg-white rounded-2xl shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+        <section className="rounded-3xl bg-white/80 backdrop-blur ring-1 ring-pink-100 shadow-sm p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
             <h2 className="text-xl font-semibold">Checkout List</h2>
             <div className="flex gap-2">
               <select
-                className="border rounded px-3 py-2"
+                className="border rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-pink-300"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -194,7 +203,10 @@ export default function AdminDashboard() {
                 <option value="waiting">Waiting Payment</option>
                 <option value="paid">Lunas</option>
               </select>
-              <button onClick={loadOrders} className="px-3 py-2 border rounded">
+              <button
+                onClick={loadOrders}
+                className="px-4 py-2 bg-white/60 ring-1 ring-pink-100 rounded-xl hover:bg-pink-50 transition"
+              >
                 Refresh
               </button>
             </div>
@@ -203,54 +215,39 @@ export default function AdminDashboard() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left border-b">
-                  <th className="py-2">Tanggal</th>
-                  <th className="py-2">User</th>
-                  <th className="py-2">Items</th>
-                  <th className="py-2">Total</th>
-                  <th className="py-2">Status</th>
-                  <th className="py-2">Aksi</th>
+                <tr className="text-left border-b border-pink-100 text-gray-500">
+                  <th className="py-3">Tanggal</th>
+                  <th className="py-3">User</th>
+                  <th className="py-3">Items</th>
+                  <th className="py-3">Total</th>
+                  <th className="py-3">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.map((o) => (
-                  <tr key={o._id} className="border-b">
-                    <td className="py-2">{new Date(o.createdAt).toLocaleString()}</td>
-                    <td className="py-2">{o.userEmail}</td>
-                    <td className="py-2">
+                  <tr key={o._id} className="border-b border-pink-50 hover:bg-pink-50/50 transition-colors">
+                    <td className="py-3">{new Date(o.createdAt).toLocaleString()}</td>
+                    <td className="py-3">{o.userEmail}</td>
+                    <td className="py-3">
                       {o.items?.map((it) => (
                         <div key={it.productId}>
                           {it.name} × {it.qty}
                         </div>
                       ))}
                     </td>
-                    <td className="py-2">Rp {Number(o.total || 0).toLocaleString("id-ID")}</td>
-                    <td className="py-2 capitalize">
-                      {o.status === "waiting" ? "Waiting Payment" : "Lunas"}
-                    </td>
-                    <td className="py-2 flex gap-2">
-                      {o.status !== "paid" && (
-                        <button
-                          onClick={() => updateOrderStatus(o._id, "paid")}
-                          className="px-3 py-1 rounded bg-green-500 text-white"
-                        >
-                          Mark Paid
-                        </button>
-                      )}
-                      {o.status !== "waiting" && (
-                        <button
-                          onClick={() => updateOrderStatus(o._id, "waiting")}
-                          className="px-3 py-1 rounded bg-yellow-500 text-white"
-                        >
-                          Mark Waiting
-                        </button>
+                    <td className="py-3">Rp {Number(o.total || 0).toLocaleString("id-ID")}</td>
+                    <td className="py-3">
+                      {o.status === "waiting" ? (
+                        <Badge tone="yellow">Waiting Payment</Badge>
+                      ) : (
+                        <Badge tone="green">Lunas</Badge>
                       )}
                     </td>
                   </tr>
                 ))}
                 {orders.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-6 text-center text-gray-500">
+                    <td colSpan={5} className="py-8 text-center text-gray-500">
                       Belum ada data
                     </td>
                   </tr>
@@ -258,122 +255,114 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
-          </section>
+        </section>
 
         {/* B. ANALYTICS */}
-        <section className="bg-white rounded-2xl shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+        <section className="rounded-3xl bg-white/80 backdrop-blur ring-1 ring-pink-100 shadow-sm p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
             <h2 className="text-xl font-semibold">Analytics Omset</h2>
             <div className="flex gap-2">
               <select
-                className="border rounded px-3 py-2"
+                className="border rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-pink-300"
                 value={range}
                 onChange={(e) => setRange(e.target.value)}
               >
                 <option value="day">Per Hari</option>
                 <option value="month">Per Bulan</option>
               </select>
-              <button onClick={loadSales} className="px-3 py-2 border rounded">
+              <button
+                onClick={loadSales}
+                className="px-4 py-2 bg-white/60 ring-1 ring-pink-100 rounded-xl hover:bg-pink-50 transition"
+              >
                 Refresh
               </button>
             </div>
           </div>
-          <Line data={chartData} />
+          <div className="rounded-2xl bg-gradient-to-b from-white to-pink-50 p-3">
+            <Line data={chartData} />
+          </div>
         </section>
 
-        {/* C. PRODUCTS CRUD */}
-        <section className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Produk (CRUD)</h2>
+        {/* C. PRODUCTS (Add + List) */}
+        <section className="rounded-3xl bg-white/80 backdrop-blur ring-1 ring-pink-100 shadow-sm p-6">
+          <h2 className="text-xl font-semibold mb-4">Produk List</h2>
 
           <form onSubmit={saveProduct} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
             <input
-              className="border rounded px-3 py-2"
+              className="border rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-pink-300"
               placeholder="Name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
             <input
-              className="border rounded px-3 py-2"
+              className="border rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-pink-300"
               placeholder="SKU"
               value={form.sku}
               onChange={(e) => setForm({ ...form, sku: e.target.value })}
             />
             <input
-              className="border rounded px-3 py-2"
+              className="border rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-pink-300"
               placeholder="Price"
               type="number"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
             />
             <input
-              className="border rounded px-3 py-2"
+              className="border rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-pink-300"
               placeholder="Stock"
               type="number"
               value={form.stock}
               onChange={(e) => setForm({ ...form, stock: e.target.value })}
             />
             <input
-              className="border rounded px-3 py-2"
+              className="border rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-pink-300"
               placeholder="Image URL"
-              value={form.imageUrl}
-              onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+              value={form.image}
+              onChange={(e) => setForm({ ...form, image: e.target.value })}
             />
-            <div className="md:col-span-5 flex gap-2">
-              <button className="px-4 py-2 bg-pink-500 text-white rounded">
-                {editingId ? "Update" : "Add"}
+            <div className="md:col-span-5">
+              <button className="px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition">
+                Add Product
               </button>
-              {editingId && (
-                <button
-                  type="button"
-                  className="px-4 py-2 border rounded"
-                  onClick={() => {
-                    setEditingId(null);
-                    setForm({ name: "", sku: "", price: "", stock: "", imageUrl: "" });
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
             </div>
           </form>
 
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left border-b">
-                  <th className="py-2">Name</th>
-                  <th className="py-2">SKU</th>
-                  <th className="py-2">Price</th>
-                  <th className="py-2">Stock</th>
-                  <th className="py-2">Aksi</th>
+                <tr className="text-left border-b border-pink-100 text-gray-500">
+                  <th className="py-3">Name</th>
+                  <th className="py-3">SKU</th>
+                  <th className="py-3">Price</th>
+                  <th className="py-3">Stock</th>
                 </tr>
               </thead>
               <tbody>
                 {products.map((p) => (
-                  <tr key={p._id} className="border-b">
-                    <td className="py-2">{p.name}</td>
-                    <td className="py-2">{p.sku}</td>
-                    <td className="py-2">Rp {Number(p.price || 0).toLocaleString("id-ID")}</td>
-                    <td className="py-2">{p.stock}</td>
-                    <td className="py-2 flex gap-2">
-                      <button
-                        onClick={() => editProduct(p)}
-                        className="px-3 py-1 rounded bg-yellow-500 text-white"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteProduct(p._id)}
-                        className="px-3 py-1 rounded bg-red-600 text-white"
-                      >
-                        Delete
-                      </button>
+                  <tr key={p._id} className="border-b border-pink-50 hover:bg-pink-50/50 transition-colors">
+                    <td className="py-3 flex items-center gap-3">
+                      {p.image ? (
+                        <img
+                          src={p.image}
+                          alt={p.name}
+                          className="w-10 h-10 rounded-xl object-cover ring-1 ring-pink-100"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-pink-100 ring-1 ring-pink-100 grid place-items-center text-pink-700 text-xs">
+                          No Img
+                        </div>
+                      )}
+                      <span>{p.name}</span>
                     </td>
+                    <td className="py-3">{p.sku}</td>
+                    <td className="py-3">Rp {Number(p.price || 0).toLocaleString("id-ID")}</td>
+                    <td className="py-3">{p.stock}</td>
                   </tr>
                 ))}
                 {products.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-gray-500">
+                    <td colSpan={4} className="py-8 text-center text-gray-500">
                       Belum ada produk
                     </td>
                   </tr>
@@ -382,7 +371,7 @@ export default function AdminDashboard() {
             </table>
           </div>
         </section>
-      </div>
+      </main>
     </div>
   );
 }
