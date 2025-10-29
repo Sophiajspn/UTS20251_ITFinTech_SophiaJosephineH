@@ -66,7 +66,8 @@ export default function Checkout() {
       }
 
       setCheckoutId(data.checkoutId || null);
-      alert("Checkout tersimpan ✅ (Notifikasi WA dikirim)");
+      // ✅ Pesan lebih jelas untuk Fonnte
+      alert("Checkout tersimpan ✅\nNotifikasi WhatsApp sedang dikirim...");
     } catch (err) {
       console.error(err);
       alert("Terjadi kesalahan saat menyimpan checkout");
@@ -200,14 +201,14 @@ export default function Checkout() {
                   {/* Email input */}
                   <div className="pt-3">
                     <label className="text-xs text-neutral-600">
-                      Email Pembeli
+                      Email Pembeli <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="contoh: kamu@gmail.com"
-                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
                     />
                   </div>
 
@@ -221,25 +222,24 @@ export default function Checkout() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="contoh: Sophia"
-                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
                     />
                   </div>
 
                   {/* Nomor WhatsApp */}
                   <div className="pt-3">
                     <label className="text-xs text-neutral-600">
-                      Nomor WhatsApp
+                      Nomor WhatsApp <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="contoh: 0812xxxxxxxx atau +62812xxxxxxxx"
-                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                      placeholder="081234567890"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
                     />
                     <p className="mt-1 text-[11px] text-neutral-500">
-                      Kami akan kirim notifikasi ke WhatsApp ini saat checkout &
-                      pembayaran sukses.
+                      💬 Notifikasi pesanan & pembayaran akan dikirim via WhatsApp
                     </p>
                   </div>
                 </div>
@@ -248,23 +248,28 @@ export default function Checkout() {
                   <button
                     onClick={createCheckout}
                     disabled={saving || paying}
-                    className={`w-full rounded-full border px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60`}
+                    className={`w-full rounded-full border px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors`}
                   >
-                    {saving ? "Menyimpan..." : "Save Checkout"}
+                    {saving ? "Menyimpan..." : "💾 Save Checkout"}
                   </button>
                   <button
                     onClick={payNow}
                     disabled={paying || saving}
-                    className={`w-full rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60`}
+                    className={`w-full rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60 transition-colors`}
                   >
-                    {paying ? "Membuat Invoice..." : "Bayar Sekarang"}
+                    {paying ? "Membuat Invoice..." : "💳 Bayar Sekarang"}
                   </button>
                 </div>
 
                 {checkoutId && (
-                  <p className="mt-3 truncate text-center text-xs text-neutral-500">
-                    Checkout ID: <span className="font-mono">{checkoutId}</span>
-                  </p>
+                  <div className="mt-3 rounded-lg bg-green-50 border border-green-200 p-2">
+                    <p className="text-center text-xs text-green-700">
+                      ✅ Checkout berhasil!
+                    </p>
+                    <p className="mt-1 truncate text-center text-[10px] text-neutral-500">
+                      ID: <span className="font-mono">{checkoutId}</span>
+                    </p>
+                  </div>
                 )}
               </div>
             </aside>

@@ -20,7 +20,10 @@ export default function Home({ userFromSSR }) {
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState("All");
 
-  // tampilkan nama user (pakai email sebagai placeholder); bisa diganti kalau kamu simpan display name di DB
+  // --- NEW: status login ditentukan dari SSR token, bukan dari localStorage
+  const isLoggedIn = Boolean(userFromSSR?.email);
+
+  // tampilkan nama user (pakai email sebagai placeholder)
   const [userName, setUserName] = useState(userFromSSR?.email || "");
   const router = useRouter();
 
@@ -65,12 +68,14 @@ export default function Home({ userFromSSR }) {
       .then((list) =>
         setProducts(list.map((p) => ({ ...p, uiCat: normalizeCategory(p.category) })))
       );
+
     const saved = JSON.parse(localStorage.getItem("cart") || "[]");
     setCart(saved);
 
+    // NEW: hanya ambil name dari localStorage bila belum login via SSR
     const nameLS = localStorage.getItem("userName");
-    if (nameLS && !userFromSSR?.email) setUserName(nameLS);
-  }, [userFromSSR?.email]);
+    if (!isLoggedIn && nameLS) setUserName(nameLS);
+  }, [isLoggedIn]);
 
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
   const cartTotal = cart.reduce((s, i) => s + Number(i.price || 0) * i.qty, 0);
@@ -105,17 +110,39 @@ export default function Home({ userFromSSR }) {
             <span className="text-xl">🍩</span>
             <h1 className="text-lg font-bold">BONOYA CAFE</h1>
           </div>
-          {/* Menampilkan Nama Pengguna */}
-          {userName && (
-            <span className="text-sm font-semibold">Welcome, {userName}!</span>
+
+          {/* RIGHT SIDE: auth area */}
+          {isLoggedIn ? (
+            <div className="flex items-center gap-3">
+              {userName && (
+                <span className="text-sm font-semibold">
+                  Welcome, {userName}!
+                </span>
+              )}
+              <button
+                onClick={handleLogout}
+                className="px-4 py-1.5 text-sm font-medium text-white bg-red-500 rounded-full hover:bg-red-600"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            // NEW: tombol Sign in & Create account saat belum login
+            <div className="flex items-center gap-2">
+              <Link
+                href="/login"
+                className="px-4 py-1.5 text-sm font-medium rounded-full border hover:bg-neutral-100"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/register"
+                className="hidden sm:inline-flex px-4 py-1.5 text-sm font-medium rounded-full bg-black text-white hover:opacity-90"
+              >
+                Create account
+              </Link>
+            </div>
           )}
-          {/* Tombol Logout */}
-          <button
-            onClick={handleLogout}
-            className="ml-4 px-4 py-1.5 text-sm font-medium text-white bg-red-500 rounded-full hover:bg-red-600"
-          >
-            Logout
-          </button>
         </div>
 
         {/* Search */}
@@ -221,11 +248,13 @@ export default function Home({ userFromSSR }) {
       <footer className="border-t bg-white/90 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <div>
-            <div className="text-xs text-neutral-500">Cart total</div>
+            <div className="text-xs text-neutral-500">Cart total ({cartCount})</div>
             <div className="text-lg font-bold">Rp {cartTotal.toLocaleString()}</div>
           </div>
+
+          {/* NEW: jika belum login, arahkan ke /login?next=/checkout */}
           <Link
-            href="/checkout"
+            href={isLoggedIn ? "/checkout" : "/login?next=/checkout"}
             className="inline-flex items-center justify-center rounded-full bg-black px-6 py-2 text-sm font-medium text-white hover:opacity-90"
           >
             Go to Checkout →
@@ -244,7 +273,7 @@ export async function getServerSideProps({ req }) {
   }
 
   try {
-    const jwt = require("jsonwebtoken"); 
+    const jwt = require("jsonwebtoken");
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     if (decoded.role === "admin") {

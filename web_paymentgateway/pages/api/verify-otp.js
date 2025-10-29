@@ -12,20 +12,34 @@ export default async function handler(req, res) {
     }
 
     try {
-      // Cari pengguna berdasarkan OTP
       const user = await User.findOne({ otp });
 
       if (!user) {
         return res.status(400).json({ message: "Invalid OTP" });
       }
 
-      // Verifikasi OTP dan update status verifikasi
+      if (user.isVerified) {
+        return res.status(400).json({ message: "Account already verified" });
+      }
+
+      if (user.otpExpiry && new Date() > user.otpExpiry) {
+        return res.status(400).json({ 
+          message: "OTP has expired. Please request a new one." 
+        });
+      }
+
       user.isVerified = true;
-      user.otp = undefined; // Hapus OTP setelah verifikasi
+      user.otp = undefined; 
+      user.otpExpiry = undefined; 
       await user.save();
 
-      res.status(200).json({ message: "Account successfully verified!" });
+      res.status(200).json({ 
+        message: "Account successfully verified!",
+        success: true 
+      });
+
     } catch (error) {
+      console.error("❌ Verify OTP error:", error);
       res.status(500).json({ message: "Error while verifying OTP" });
     }
   } else {

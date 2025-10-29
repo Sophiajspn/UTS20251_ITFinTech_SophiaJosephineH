@@ -1,9 +1,7 @@
 import bcrypt from 'bcrypt';
 import User from '../../models/User'; 
 import { connectDB } from '../../lib/db';  
-import twilio from 'twilio';  
-
-const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
+import { sendWaText, toFonnteFormat } from '@/lib/wa_fonnte'; 
 
 export default async function handler(req, res) {
   await connectDB();  
@@ -17,49 +15,68 @@ export default async function handler(req, res) {
     }
 
     try {
+      // Cek phone sudah ada atau belum
       const existingPhone = await User.findOne({ phone });
       if (existingPhone) {
         return res.status(400).json({ message: 'Phone number already exists' });
       }
 
+      // Cek email sudah ada atau belum
       const existingUser = await User.findOne({ email });
       if (existingUser) {
         return res.status(400).json({ message: 'Email already exists' });
       }
 
+      // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
 
+      // Generate OTP 6 digit
+      const otp = Math.floor(100000 + Math.random() * 900000);
+
+      // Simpan user dengan OTP
       const newUser = new User({
         name,
         email,
         phone,
         password: hashedPassword,
         role,  
-        isVerified: false, 
+        isVerified: false,
+        otp, // ✅ Simpan OTP langsung
+        otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
       });
 
       await newUser.save();
 
-      const otp = Math.floor(100000 + Math.random() * 900000); // OTP 6 digit
+      // ✅ Kirim OTP via Fonnte (non-blocking)
+      try {
+        const to = toFonnteFormat(phone);
+        const body = `Halo *${name}*! 👋
 
-      const phoneWithCountryCode = phone.startsWith('+') ? phone : `+62${phone.slice(1)}`; // Misalnya untuk Indonesia
+Kode OTP kamu untuk verifikasi akun:
 
-      const message = await client.messages.create({
-        from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
-        to: `whatsapp:${phoneWithCountryCode}`,
-        body: `Your OTP code is: ${otp}`,
+*${otp}*
+
+Kode berlaku selama 10 menit.
+
+Jangan bagikan kode ini ke siapa pun! 🔒`;
+
+        await sendWaText({ to, body });
+        console.log("✅ OTP sent to:", to);
+
+      } catch (waError) {
+        console.error("⚠️ Failed to send OTP via WA:", waError.message);
+        // Tidak throw error, registrasi tetap sukses
+        // User bisa request resend OTP
+      }
+
+      res.status(201).json({ 
+        message: 'Registrasi berhasil! Cek WhatsApp kamu untuk kode OTP.',
+        userId: newUser._id 
       });
-
-      console.log("OTP sent:", message.sid);
-
-      newUser.otp = otp;
-      await newUser.save();
-
-      res.status(201).json({ message: 'User registered successfully! Please check your WhatsApp for the OTP.' });
 
     } catch (error) {
-      console.error(error);  
-      res.status(500).json({ message: 'Error while registering user' });
+      console.error("❌ Register error:", error);  
+      res.status(500).json({ message: 'Error saat registrasi user' });
     }
   } else {
     res.status(405).json({ message: 'Method Not Allowed' });
