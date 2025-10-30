@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/db";
 import Checkout from "@/models/Checkout";
-import { sendWaText, toFonnteFormat } from "@/lib/wa_fonnte"; // ✅ Update import
+import { sendWaText, toFonnteFormat } from "@/lib/wa_fonnte";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
@@ -71,6 +71,7 @@ export default async function handler(req, res) {
       process.env.NEXT_PUBLIC_BASE_URL ||
       "http://localhost:3000";
 
+    // ✅ FIX: Pakai tanda kurung biasa
     const auth = Buffer.from(`${process.env.XENDIT_API_KEY}:`).toString("base64");
 
     const xenditResp = await fetch("https://api.xendit.co/v2/invoices", {
@@ -86,13 +87,14 @@ export default async function handler(req, res) {
         description: `Invoice pesanan ${doc._id}`,
         success_redirect_url: `${baseUrl}/success?inv=${doc._id}`,
         failure_redirect_url: `${baseUrl}/failed?inv=${doc._id}`,
-
-        // 🔥 PENTING: Pastikan path webhook benar
-        callback_url: `${baseUrl}/api/webhook/xendit`,
         
-        // 🔥 PENTING: Token harus sama dengan yang di webhook
+        // ✅ FIX: Path webhook (sesuaikan dengan nama folder kamu)
+        // Jika folder kamu "webhook" (singular), pakai ini:
+        // callback_url: `${baseUrl}/api/webhook/xendit`,
+        // Jika folder kamu "webhooks" (plural), pakai ini:
+        callback_url: `${baseUrl}/api/webhooks/xendit`,
+        
         callback_authentication_token: process.env.XENDIT_CB_TOKEN,
-
         customer: {
           given_names: payerName || "Customer",
           mobile_number: rawPhone || undefined,
@@ -132,7 +134,7 @@ export default async function handler(req, res) {
     // 4) Kirim WA notifikasi checkout (non-blocking)
     if (rawPhone) {
       try {
-        const to = toFonnteFormat(rawPhone); // ✅ Update: pakai toFonnteFormat
+        const to = toFonnteFormat(rawPhone);
         const itemsList = cleanItems
           .map((i) => `• ${i.name} (${i.qty}x) - Rp ${(i.price * i.qty).toLocaleString("id-ID")}`)
           .join("\n");

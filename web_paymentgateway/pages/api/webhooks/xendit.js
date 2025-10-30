@@ -1,4 +1,4 @@
-// pages/api/webhook/xendit.js
+// pages/api/webhooks/xendit.js
 import { connectDB } from "@/lib/db";
 import Checkout from "@/models/Checkout";
 import Payment from "@/models/Payment";
@@ -67,6 +67,14 @@ export default async function handler(req, res) {
 
     console.log("✅ Checkout found:", checkoutDoc._id);
 
+    // 🔍 DEBUG: Log data checkout untuk debugging
+    console.log("📋 Checkout data:", {
+      _id: checkoutDoc._id,
+      payerPhone: checkoutDoc.payerPhone,
+      payerName: checkoutDoc.payerName,
+      payerEmail: checkoutDoc.payerEmail,
+    });
+
     // --- Handle status PAID ---
     if (status === "PAID") {
       // Cek apakah sudah pernah notifikasi
@@ -80,8 +88,22 @@ export default async function handler(req, res) {
           paidAt: new Date()
         });
 
-        // Kirim WA
-        const rawPhone = checkoutDoc.payerPhone || d?.customer?.phone || d?.payer_phone || "";
+        // Kirim WA - Coba dari berbagai sumber
+        const rawPhone = 
+          checkoutDoc.payerPhone || 
+          checkoutDoc.phone || 
+          checkoutDoc.customerPhone ||
+          d?.customer?.mobile_number || 
+          d?.customer?.phone_number ||
+          d?.payer_phone || 
+          "";
+
+        console.log("📞 Raw phone from sources:", {
+          fromCheckout: checkoutDoc.payerPhone,
+          fromXendit: d?.customer?.mobile_number,
+          final: rawPhone
+        });
+
         const to = rawPhone ? toFonnteFormat(rawPhone) : null;
         const name = checkoutDoc.payerName || d?.customer?.given_names || "Pelanggan";
 
@@ -91,10 +113,20 @@ export default async function handler(req, res) {
             `Pesanan #${checkoutDoc._id} akan segera kami proses.\n\n` +
             `Terima kasih sudah berbelanja di Bonoya Café ☕`;
 
-          await sendWaText({ to, body: message });
-          console.log("✅ WA sent to:", to);
+          try {
+            await sendWaText({ to, body: message });
+            console.log("✅ WA payment success sent to:", to);
+          } catch (waError) {
+            console.error("❌ Failed to send WA:", waError.message);
+          }
         } else {
-          console.log("⚠️ No valid phone number:", rawPhone);
+          console.log("⚠️ No valid phone number found:", {
+            checkoutDoc: {
+              payerPhone: checkoutDoc.payerPhone,
+              phone: checkoutDoc.phone,
+            },
+            xenditCustomer: d?.customer
+          });
         }
       } else {
         console.log("ℹ️ Already notified for PAID status");
@@ -120,8 +152,12 @@ export default async function handler(req, res) {
             `⏰ Halo *${name}*, invoice pembayaran kamu sudah *KEDALUWARSA*.\n\n` +
             `Silakan buat pesanan baru jika masih ingin order. Terima kasih!`;
 
-          await sendWaText({ to, body: message });
-          console.log("✅ Expired notification sent to:", to);
+          try {
+            await sendWaText({ to, body: message });
+            console.log("✅ Expired notification sent to:", to);
+          } catch (waError) {
+            console.error("❌ Failed to send expired WA:", waError.message);
+          }
         }
       }
     }

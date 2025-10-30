@@ -66,7 +66,6 @@ export default function Checkout() {
       }
 
       setCheckoutId(data.checkoutId || null);
-      // ✅ Pesan lebih jelas untuk Fonnte
       alert("Checkout tersimpan ✅\nNotifikasi WhatsApp sedang dikirim...");
     } catch (err) {
       console.error(err);
@@ -250,14 +249,14 @@ export default function Checkout() {
                     disabled={saving || paying}
                     className={`w-full rounded-full border px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors`}
                   >
-                    {saving ? "Menyimpan..." : "💾 Save Checkout"}
+                    {saving ? "Menyimpan..." : "Save Checkout"}
                   </button>
                   <button
                     onClick={payNow}
                     disabled={paying || saving}
                     className={`w-full rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60 transition-colors`}
                   >
-                    {paying ? "Membuat Invoice..." : "💳 Bayar Sekarang"}
+                    {paying ? "Membuat Invoice..." : "Bayar Sekarang"}
                   </button>
                 </div>
 
